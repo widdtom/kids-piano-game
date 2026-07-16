@@ -205,7 +205,7 @@
     position:fixed; inset:0; background:#fff6f0; z-index:999;
     display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px;
   }
-  @media (orientation:landscape){
+  @media (orientation:landscape) and (hover:none) and (pointer:coarse){
     #rotate-overlay{ display:flex; }
   }
   .rotate-emoji{ font-size:70px; animation:spin 1.6s ease-in-out infinite; }
