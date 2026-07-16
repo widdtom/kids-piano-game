@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Music Tiles">
+<meta name="format-detection" content="telephone=no">
+<title>Music Tiles</title>
+<style>
+  :root{
+    --pink:#ffc9de;
+    --pink-deep:#ff9dc4;
+    --blue:#c9e7ff;
+    --blue-deep:#8fc9f5;
+    --yellow:#fff3b0;
+    --yellow-deep:#ffe066;
+    --green:#c8f4de;
+    --green-deep:#8fe3b3;
+    --ink:#5b5470;
+    --spring: cubic-bezier(.34,1.56,.64,1);
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    overscroll-behavior:none;
+    touch-action:none;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background:linear-gradient(160deg,#fdeef7 0%, #eef3ff 45%, #eafff3 100%);
+    color:var(--ink);
+  }
+  #app{
+    position:fixed; inset:0;
+    height:100dvh; width:100dvw;
+    overflow:hidden;
+    padding-top:var(--safe-t); padding-bottom:var(--safe-b);
+    padding-left:var(--safe-l); padding-right:var(--safe-r);
+  }
+  .screen{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:16px;
+    opacity:0; pointer-events:none;
+    transform:scale(.96);
+    transition:opacity .35s ease, transform .35s var(--spring);
+  }
+  .screen.active{ opacity:1; pointer-events:auto; transform:scale(1); }
+
+  /* floating decorative blobs */
+  .blob{ position:absolute; border-radius:50%; filter:blur(1px); opacity:.55; pointer-events:none;
+    animation:float 6s ease-in-out infinite; }
+  @keyframes float{ 0%,100%{ transform:translateY(0px) } 50%{ transform:translateY(-18px) } }
+
+  h1.title{
+    font-size:clamp(22px,6vw,34px); margin:0 0 14px; text-align:center; font-weight:800;
+    color:var(--ink); text-shadow:0 2px 0 #fff;
+  }
+  .subtitle-emoji{ font-size:clamp(30px,8vw,44px); }
+
+  /* ---------- Song grid ---------- */
+  #screen-select .grid{
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px;
+    width:min(560px, calc(100vw - 32px)); max-height:80vh;
+  }
+  .song-card{
+    position:relative; border:none; border-radius:26px; padding:14px 8px 10px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; cursor:pointer; min-width:0; width:100%;
+    box-shadow:0 8px 0 rgba(0,0,0,.08), 0 10px 20px rgba(0,0,0,.08);
+    transition:transform .18s var(--spring), box-shadow .18s var(--spring);
+    aspect-ratio:1/0.92;
+  }
+  .song-card .icon{ font-size:clamp(38px,10vw,56px); line-height:1; filter:drop-shadow(0 3px 2px rgba(0,0,0,.12)); }
+  .song-card .label{
+    font-size:clamp(12px,3.2vw,17px); font-weight:800; color:var(--ink); text-align:center;
+    max-width:100%; overflow-wrap:break-word; word-break:break-word;
+  }
+  .song-card.pressed{ transform:scale(.92) translateY(4px); box-shadow:0 2px 0 rgba(0,0,0,.08), 0 4px 10px rgba(0,0,0,.08); }
+
+  /* ---------- Difficulty ---------- */
+  #screen-difficulty .grid{
+    display:flex; gap:18px; flex-wrap:wrap; justify-content:center; width:min(560px, calc(100vw - 32px));
+  }
+  .level-card{
+    border:none; border-radius:28px; width:150px; height:170px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    box-shadow:0 8px 0 rgba(0,0,0,.08), 0 10px 20px rgba(0,0,0,.08);
+    transition:transform .18s var(--spring), box-shadow .18s var(--spring);
+  }
+  .level-card .icon{ font-size:56px; filter:drop-shadow(0 3px 2px rgba(0,0,0,.12)); }
+  .level-card .label{ font-weight:800; font-size:15px; }
+  .level-card.pressed{ transform:scale(.92) translateY(4px); box-shadow:0 2px 0 rgba(0,0,0,.08), 0 4px 10px rgba(0,0,0,.08); }
+
+  .back-row{ display:flex; align-items:center; gap:10px; margin-top:22px; }
+
+  .icon-btn{
+    border:none; border-radius:50%; width:56px; height:56px; font-size:26px;
+    background:#fff; box-shadow:0 6px 0 rgba(0,0,0,.08), 0 6px 14px rgba(0,0,0,.1);
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .15s var(--spring), box-shadow .15s var(--spring);
+  }
+  .icon-btn.pressed{ transform:scale(.88); box-shadow:0 2px 0 rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.1); }
+  .chosen-chip{
+    background:#fff; border-radius:20px; padding:8px 16px; font-size:26px;
+    box-shadow:0 4px 12px rgba(0,0,0,.08);
+  }
+
+  /* ---------- Game screen ---------- */
+  #screen-game{ padding:8px; justify-content:flex-start; }
+  .game-topbar{
+    width:100%; max-width:640px; display:flex; align-items:center; justify-content:space-between;
+    gap:8px; padding:6px 4px 10px;
+  }
+  .hud-chip{
+    background:#fff; border-radius:20px; padding:8px 14px; font-weight:800; font-size:16px;
+    display:flex; align-items:center; gap:6px; box-shadow:0 4px 10px rgba(0,0,0,.08);
+    white-space:nowrap;
+  }
+  .hud-chip .num{ min-width:1.4em; text-align:left; }
+
+  .track{
+    position:relative; flex:1; width:100%; max-width:640px;
+    display:flex; gap:10px; padding:0 4px 4px;
+    background:linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.05));
+    border-radius:24px;
+    overflow:hidden;
+  }
+  .lane{
+    position:relative; flex:1; height:100%; border-radius:18px;
+    background:rgba(255,255,255,.35);
+  }
+  .lane::after{
+    content:""; position:absolute; left:0; right:0; top:0; bottom:0;
+    border-radius:18px; pointer-events:none;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.5);
+  }
+  .lane[data-lane="0"]{ background:linear-gradient(180deg, rgba(255,201,222,.25), rgba(255,201,222,.55)); }
+  .lane[data-lane="1"]{ background:linear-gradient(180deg, rgba(201,231,255,.25), rgba(201,231,255,.55)); }
+  .lane[data-lane="2"]{ background:linear-gradient(180deg, rgba(255,243,176,.25), rgba(255,243,176,.55)); }
+  .lane[data-lane="3"]{ background:linear-gradient(180deg, rgba(200,244,222,.25), rgba(200,244,222,.55)); }
+
+  .hitzone{
+    position:absolute; left:6%; width:88%; border-radius:16px;
+    border:3px dashed rgba(255,255,255,.9);
+    background:rgba(255,255,255,.25);
+    animation:pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{ opacity:.55 } 50%{ opacity:.95 } }
+
+  .key{
+    position:absolute; bottom:0; left:0; right:0; height:64px;
+    display:flex; align-items:center; justify-content:center;
+    border-bottom-left-radius:18px; border-bottom-right-radius:18px;
+  }
+  .key .dot{ width:22px; height:22px; border-radius:50%; background:#fff; opacity:.8;
+    transition:transform .12s var(--spring); }
+  .lane.tapped .dot{ transform:scale(1.6); }
+
+  .tile{
+    position:absolute; left:6%; width:88%; border-radius:18px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 10px rgba(0,0,0,.15), inset 0 -4px 0 rgba(0,0,0,.08);
+    will-change:transform;
+  }
+  .lane[data-lane="0"] .tile{ background:linear-gradient(160deg,#ffd7e8,var(--pink-deep)); }
+  .lane[data-lane="1"] .tile{ background:linear-gradient(160deg,#dcf0ff,var(--blue-deep)); }
+  .lane[data-lane="2"] .tile{ background:linear-gradient(160deg,#fff8d1,var(--yellow-deep)); }
+  .lane[data-lane="3"] .tile{ background:linear-gradient(160deg,#d9f9e7,var(--green-deep)); }
+
+  .tile.hit{
+    animation:popTile .32s var(--spring) forwards;
+  }
+  @keyframes popTile{
+    0%{ transform:translateY(var(--ty,0px)) scale(1); opacity:1; filter:brightness(1); }
+    40%{ transform:translateY(var(--ty,0px)) scale(1.5); opacity:1; filter:brightness(1.3); }
+    100%{ transform:translateY(var(--ty,0px)) scale(2.1); opacity:0; filter:brightness(1.5); }
+  }
+  .tile.miss{ animation:fadeTile .25s ease forwards; }
+  @keyframes fadeTile{
+    from{ transform:translateY(var(--ty,0px)) scale(1); opacity:1; }
+    to{ transform:translateY(var(--ty,0px)) scale(.8); opacity:0; }
+  }
+
+  /* ---------- End screen ---------- */
+  .stars{ font-size:clamp(40px,10vw,60px); letter-spacing:6px; margin:10px 0 6px; }
+  .end-buttons{ display:flex; gap:18px; margin-top:18px; }
+  .big-btn{
+    border:none; border-radius:26px; padding:18px 22px; font-size:34px;
+    background:#fff; box-shadow:0 8px 0 rgba(0,0,0,.08), 0 10px 20px rgba(0,0,0,.1);
+    transition:transform .16s var(--spring), box-shadow .16s var(--spring);
+  }
+  .big-btn.pressed{ transform:scale(.9) translateY(4px); box-shadow:0 2px 0 rgba(0,0,0,.08); }
+
+  /* ---------- Rotate overlay ---------- */
+  #rotate-overlay{
+    position:fixed; inset:0; background:#fff6f0; z-index:999;
+    display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px;
+  }
+  @media (orientation:landscape){
+    #rotate-overlay{ display:flex; }
+  }
+  .rotate-emoji{ font-size:70px; animation:spin 1.6s ease-in-out infinite; }
+  @keyframes spin{ 0%,100%{ transform:rotate(0deg) } 50%{ transform:rotate(90deg) } }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- SONG SELECT -->
+  <div class="screen active" id="screen-select">
+    <div class="blob" style="width:70px;height:70px;background:var(--yellow);top:6%;left:8%;"></div>
+    <div class="blob" style="width:50px;height:50px;background:var(--blue);top:12%;right:10%;animation-delay:1s;"></div>
+    <div class="blob" style="width:40px;height:40px;background:var(--pink);bottom:10%;left:12%;animation-delay:2s;"></div>
+    <h1 class="title"><span class="subtitle-emoji">🎹</span><br>Pick a song</h1>
+    <div class="grid" id="song-grid"></div>
+  </div>
+
+  <!-- DIFFICULTY SELECT -->
+  <div class="screen" id="screen-difficulty">
+    <h1 class="title">How fast?</h1>
+    <div class="grid" id="level-grid"></div>
+    <div class="back-row">
+      <button class="icon-btn" id="btn-back-to-songs">↩️</button>
+      <div class="chosen-chip" id="chosen-song-chip"></div>
+    </div>
+  </div>
+
+  <!-- GAME -->
+  <div class="screen" id="screen-game">
+    <div class="game-topbar">
+      <button class="icon-btn" id="btn-home">🏠</button>
+      <div class="hud-chip">🎵 <span class="num" id="score-val">0</span></div>
+      <div class="hud-chip">🏆 <span class="num" id="best-val">0</span></div>
+    </div>
+    <div class="track" id="track">
+      <div class="lane" data-lane="0"><div class="hitzone" id="hz0"></div><div class="key"><div class="dot"></div></div></div>
+      <div class="lane" data-lane="1"><div class="hitzone" id="hz1"></div><div class="key"><div class="dot"></div></div></div>
+      <div class="lane" data-lane="2"><div class="hitzone" id="hz2"></div><div class="key"><div class="dot"></div></div></div>
+      <div class="lane" data-lane="3"><div class="hitzone" id="hz3"></div><div class="key"><div class="dot"></div></div></div>
+    </div>
+  </div>
+
+  <!-- END -->
+  <div class="screen" id="screen-end">
+    <div class="subtitle-emoji" id="end-icon">🎉</div>
+    <div class="stars" id="end-stars">⭐⭐⭐</div>
+    <div class="hud-chip">🎵 <span class="num" id="end-score">0</span></div>
+    <div class="end-buttons">
+      <button class="big-btn" id="btn-replay">🔁</button>
+      <button class="big-btn" id="btn-songlist">🏠</button>
+    </div>
+  </div>
+
+</div>
+
+<div id="rotate-overlay">
+  <div class="rotate-emoji">📱</div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* =====================================================================
+     SESSION-ONLY SCORE MEMORY
+     sessionBest lives only in this JS variable for the lifetime of the
+     page. It is intentionally NOT persisted to localStorage/sessionStorage
+     or any backend — a page reload resets it to 0. This is by design
+     (see spec: "no persistence... resets on page reload"), not a bug.
+  ===================================================================== */
+  let sessionBest = 0;
+
+  /* ---------------------------------------------------------------------
+     Song data: each song is a flat array of {note, beats, lane}.
+     `beats` is expressed in musical beats (quarter = 1); the tempo
+     constant BEAT_MS below converts beats -> milliseconds uniformly for
+     every song, so tempo/spacing logic never needs to be rewritten
+     per-song. `lane` (0-3) is which of the 4 columns the tile falls in;
+     it is assigned per-song so a song's pitches map consistently onto
+     the 4 lanes even when a tune uses more than 4 distinct notes.
+  --------------------------------------------------------------------- */
+  const BEAT_MS = 500; // 120 BPM, shared by all songs
+
+  function seq(list){
+    // list: flat [note, beats, lane, note, beats, lane, ...]
+    const out = [];
+    for(let i=0;i<list.length;i+=3){
+      out.push({ note:list[i], beats:list[i+1], lane:list[i+2] });
+    }
+    return out;
+  }
+
+  const twinkle = seq([
+    'C4',1,0, 'C4',1,0, 'G4',1,0, 'G4',1,0, 'A4',1,1, 'A4',1,1, 'G4',2,0,
+    'F4',1,3, 'F4',1,3, 'E4',1,2, 'E4',1,2, 'D4',1,1, 'D4',1,1, 'C4',2,0,
+    'G4',1,0, 'G4',1,0, 'F4',1,3, 'F4',1,3, 'E4',1,2, 'E4',1,2, 'D4',2,1,
+    'G4',1,0, 'G4',1,0, 'F4',1,3, 'F4',1,3, 'E4',1,2, 'E4',1,2, 'D4',2,1,
+    'C4',1,0, 'C4',1,0, 'G4',1,0, 'G4',1,0, 'A4',1,1, 'A4',1,1, 'G4',2,0,
+    'F4',1,3, 'F4',1,3, 'E4',1,2, 'E4',1,2, 'D4',1,1, 'D4',1,1, 'C4',2,0
+  ]);
+
+  const hotCross = seq([
+    'E4',1,2, 'D4',1,1, 'C4',2,0,
+    'E4',1,2, 'D4',1,1, 'C4',2,0,
+    'C4',.5,0, 'C4',.5,0, 'C4',.5,0, 'C4',.5,0, 'D4',.5,1, 'D4',.5,1, 'D4',.5,1, 'D4',.5,1,
+    'E4',1,2, 'D4',1,1, 'C4',2,0
+  ]);
+
+  const maryLamb = seq([
+    'E4',1,2, 'D4',1,1, 'C4',1,0, 'D4',1,1, 'E4',1,2, 'E4',1,2, 'E4',2,2,
+    'D4',1,1, 'D4',1,1, 'D4',2,1,
+    'E4',1,2, 'G4',1,3, 'G4',2,3,
+    'E4',1,2, 'D4',1,1, 'C4',1,0, 'D4',1,1, 'E4',1,2, 'E4',1,2, 'E4',1,2, 'E4',1,2,
+    'D4',1,1, 'D4',1,1, 'E4',1,2, 'D4',1,1, 'C4',3,0
+  ]);
+
+  const frereJacques = seq([
+    'C4',1,0, 'D4',1,1, 'E4',1,2, 'C4',1,0,
+    'C4',1,0, 'D4',1,1, 'E4',1,2, 'C4',1,0,
+    'E4',1,2, 'F4',1,3, 'G4',2,0,
+    'E4',1,2, 'F4',1,3, 'G4',2,0,
+    'G4',.5,0, 'A4',.5,1, 'G4',.5,0, 'F4',.5,3, 'E4',1,2, 'C4',1,0,
+    'G4',.5,0, 'A4',.5,1, 'G4',.5,0, 'F4',.5,3, 'E4',1,2, 'C4',1,0,
+    'C4',1,0, 'G3',1,0, 'C4',2,0,
+    'C4',1,0, 'G3',1,0, 'C4',2,0
+  ]);
+
+  const sunnyMeadowOnce = [
+    'C4',.5,0, 'E4',.5,2, 'G4',1,3, 'E4',1,2,
+    'C4',.5,0, 'E4',.5,2, 'G4',1,3, 'E4',1,2,
+    'A4',.5,1, 'G4',.5,3, 'E4',.5,2, 'D4',.5,0, 'C4',2,0,
+    'G4',.5,3, 'A4',.5,1, 'G4',.5,3, 'E4',.5,2, 'D4',1,0, 'C4',1,0
+  ];
+  const sunnyMeadow = seq(sunnyMeadowOnce.concat(sunnyMeadowOnce));
+
+  const butterflyHopOnce = [
+    'E4',.5,0, 'G4',.5,1, 'A4',.5,2, 'G4',.5,1, 'E4',1,0,
+    'E4',.5,0, 'G4',.5,1, 'A4',.5,2, 'G4',.5,1, 'E4',1,0,
+    'A4',.5,2, 'C5',.5,3, 'D5',1,0, 'C5',.5,3, 'A4',.5,2,
+    'G4',.5,1, 'E4',.5,0, 'G4',.5,1, 'E4',.5,0, 'E4',2,0
+  ];
+  const butterflyHop = seq(butterflyHopOnce.concat(butterflyHopOnce));
+
+  const SONGS = [
+    { id:'twinkle', label:'Twinkle Twinkle', icon:'⭐', bg:'linear-gradient(160deg,#fff9d6,#ffe98a)', notes:twinkle },
+    { id:'hotcross', label:'Hot Cross Buns', icon:'🥯', bg:'linear-gradient(160deg,#ffe9d2,#f3c896)', notes:hotCross },
+    { id:'marylamb', label:'Mary\'s Lamb', icon:'🐑', bg:'linear-gradient(160deg,#fff7f2,#ffd6e0)', notes:maryLamb },
+    { id:'frere', label:'Frère Jacques', icon:'🔔', bg:'linear-gradient(160deg,#dff1ff,#a9d7ff)', notes:frereJacques },
+    { id:'meadow', label:'Sunny Meadow', icon:'🌼', bg:'linear-gradient(160deg,#e7ffef,#bdf5cf)', notes:sunnyMeadow },
+    { id:'butterfly', label:'Butterfly Hop', icon:'🦋', bg:'linear-gradient(160deg,#f1e6ff,#d7bdfa)', notes:butterflyHop },
+  ];
+
+  /* ---------------------------------------------------------------------
+     Difficulty: exactly two numeric knobs power all three levels, so the
+     game loop below is written once and simply reads whichever level's
+     numbers are active.
+       fallMs  = time (ms) a tile takes to travel from top to hit zone
+                 -> smaller = faster scroll speed
+       tolMs   = +/- window (ms) around the perfect hit instant that still
+                 counts as a hit -> smaller = tighter timing tolerance
+  --------------------------------------------------------------------- */
+  const LEVELS = [
+    { id:'easy',   label:'Easy',   icon:'🐢', color:'linear-gradient(160deg,#e3ffef,#b8f2cf)', fallMs:3200, tolMs:280 },
+    { id:'medium', label:'Medium', icon:'🐇', color:'linear-gradient(160deg,#fff6d9,#ffe08a)', fallMs:2300, tolMs:190 },
+    { id:'hard',   label:'Hard',   icon:'🐆', color:'linear-gradient(160deg,#ffe6de,#ffb79e)', fallMs:1600, tolMs:120 },
+  ];
+
+  /* ---------------------------- Audio ---------------------------------- */
+  let audioCtx = null;
+  function ensureAudio(){
+    if(!audioCtx){
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new Ctx();
+    }
+    if(audioCtx.state === 'suspended'){ audioCtx.resume(); }
+    return audioCtx;
+  }
+
+  function noteFreq(note){
+    const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    const m = /^([A-G]#?)(\d)$/.exec(note);
+    const idx = names.indexOf(m[1]);
+    const oct = parseInt(m[2],10);
+    const semis = idx - 9 + (oct-4)*12; // semitones from A4
+    return 440 * Math.pow(2, semis/12);
+  }
+
+  function playNote(note, durationSec){
+    const ctx = ensureAudio();
+    const freq = noteFreq(note);
+    const now = ctx.currentTime;
+    const dur = Math.max(0.18, durationSec);
+    const release = Math.max(0.15, dur * 0.35);
+
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'triangle';
+    osc1.frequency.value = freq;
+
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.value = freq * 2;
+
+    const gain = ctx.createGain();
+    const overtoneGain = ctx.createGain();
+    overtoneGain.gain.value = 0.12;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 3200;
+
+    osc1.connect(gain);
+    osc2.connect(overtoneGain);
+    overtoneGain.connect(gain);
+    gain.connect(filter);
+    filter.connect(ctx.destination);
+
+    const attack = 0.012;
+    const peak = 0.32;
+    const sustainEnd = now + Math.max(attack, dur - release);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(peak, now + attack);
+    gain.gain.setValueAtTime(peak, sustainEnd);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur + release);
+
+    osc1.start(now);
+    osc2.start(now);
+    const stopAt = now + dur + release + 0.05;
+    osc1.stop(stopAt);
+    osc2.stop(stopAt);
+  }
+
+  /* --------------------------- UI wiring -------------------------------- */
+  const screens = {
+    select: document.getElementById('screen-select'),
+    difficulty: document.getElementById('screen-difficulty'),
+    game: document.getElementById('screen-game'),
+    end: document.getElementById('screen-end'),
+  };
+  function showScreen(name){
+    Object.values(screens).forEach(s=>s.classList.remove('active'));
+    screens[name].classList.add('active');
+  }
+
+  function pressable(el){
+    el.addEventListener('pointerdown', ()=> el.classList.add('pressed'));
+    ['pointerup','pointercancel','pointerleave'].forEach(ev=>
+      el.addEventListener(ev, ()=> el.classList.remove('pressed')));
+  }
+
+  // Build song grid
+  const songGrid = document.getElementById('song-grid');
+  let chosenSong = null, chosenLevel = null;
+
+  SONGS.forEach(song=>{
+    const btn = document.createElement('button');
+    btn.className = 'song-card';
+    btn.style.background = song.bg;
+    btn.innerHTML = `<div class="icon">${song.icon}</div><div class="label">${song.label}</div>`;
+    pressable(btn);
+    btn.addEventListener('pointerup', ()=>{
+      chosenSong = song;
+      document.getElementById('chosen-song-chip').textContent = song.icon;
+      showScreen('difficulty');
+    });
+    songGrid.appendChild(btn);
+  });
+
+  // Build level grid
+  const levelGrid = document.getElementById('level-grid');
+  LEVELS.forEach(level=>{
+    const btn = document.createElement('button');
+    btn.className = 'level-card';
+    btn.style.background = level.color;
+    btn.innerHTML = `<div class="icon">${level.icon}</div><div class="label">${level.label}</div>`;
+    pressable(btn);
+    btn.addEventListener('pointerup', ()=>{
+      chosenLevel = level;
+      startGame(chosenSong, chosenLevel);
+    });
+    levelGrid.appendChild(btn);
+  });
+
+  document.getElementById('btn-back-to-songs').addEventListener('pointerup', ()=> showScreen('select'));
+  pressable(document.getElementById('btn-back-to-songs'));
+
+  const btnHome = document.getElementById('btn-home');
+  pressable(btnHome);
+  btnHome.addEventListener('pointerup', ()=>{ stopGame(); showScreen('select'); });
+
+  const btnReplay = document.getElementById('btn-replay');
+  const btnSonglist = document.getElementById('btn-songlist');
+  pressable(btnReplay); pressable(btnSonglist);
+  btnReplay.addEventListener('pointerup', ()=> startGame(chosenSong, chosenLevel));
+  btnSonglist.addEventListener('pointerup', ()=> showScreen('select'));
+
+  /* ---------------------------- Game engine ----------------------------- */
+  const trackEl = document.getElementById('track');
+  const laneEls = [0,1,2,3].map(i=>document.querySelector(`.lane[data-lane="${i}"]`));
+  const hitzoneEls = [0,1,2,3].map(i=>document.getElementById('hz'+i));
+  const scoreValEl = document.getElementById('score-val');
+  const bestValEl = document.getElementById('best-val');
+
+  let rafId = null;
+  let songStartTs = 0;
+  let spawnQueue = [];
+  let activeTiles = [];
+  let score = 0;
+  let hits = 0;
+  let totalNotes = 0;
+  let fallMs = 2300, tolMs = 190;
+  let hitZoneCenterY = 0, tileSize = 0, trackHeight = 0, laneWidth = 0;
+  let finishTimer = null;
+  let playing = false;
+
+  function updateHUD(){
+    scoreValEl.textContent = score;
+    bestValEl.textContent = sessionBest;
+  }
+
+  function measureGeometry(){
+    trackHeight = trackEl.clientHeight;
+    laneWidth = laneEls[0].clientWidth;
+    tileSize = Math.min(laneWidth * 0.8, 92);
+    hitZoneCenterY = Math.max(trackHeight - 130, trackHeight * 0.62);
+
+    const pxPerMs = (hitZoneCenterY + tileSize/2) / fallMs;
+    const hzHeight = Math.max(56, Math.min(2 * tolMs * pxPerMs, 150));
+    hitzoneEls.forEach(hz=>{
+      hz.style.height = hzHeight + 'px';
+      hz.style.top = (hitZoneCenterY - tileSize/2 - hzHeight/2) + 'px';
+    });
+  }
+
+  function topForFrac(frac){
+    // frac 0 -> tile fully above track; frac 1 -> tile center at hit zone center
+    const travel = hitZoneCenterY + tileSize/2;
+    return -tileSize + frac * travel;
+  }
+
+  function stopGame(){
+    playing = false;
+    if(rafId) cancelAnimationFrame(rafId);
+    if(finishTimer) clearTimeout(finishTimer);
+    rafId = null; finishTimer = null;
+    activeTiles.forEach(t=>{ if(t.el && t.el.parentNode) t.el.parentNode.removeChild(t.el); });
+    activeTiles = [];
+    spawnQueue = [];
+  }
+
+  function startGame(song, level){
+    stopGame();
+    fallMs = level.fallMs;
+    tolMs = level.tolMs;
+    score = 0; hits = 0;
+    totalNotes = song.notes.length;
+    updateHUD();
+    showScreen('game');
+
+    // measure after layout settles
+    requestAnimationFrame(()=>{
+      measureGeometry();
+
+      let cumulative = 0;
+      spawnQueue = song.notes.map(n=>{
+        const durMs = n.beats * BEAT_MS;
+        const spawnTime = cumulative;
+        cumulative += durMs;
+        return { note:n.note, lane:n.lane, durMs, spawnTime, hitTime: spawnTime + fallMs };
+      });
+
+      playing = true;
+      songStartTs = performance.now();
+      rafId = requestAnimationFrame(tick);
+    });
+  }
+
+  function spawnTile(spec){
+    const el = document.createElement('div');
+    el.className = 'tile';
+    el.style.height = tileSize + 'px';
+    el.style.transform = `translateY(${-tileSize}px)`;
+    laneEls[spec.lane].appendChild(el);
+    const tile = { ...spec, el, resolved:false };
+    activeTiles.push(tile);
+    return tile;
+  }
+
+  function resolveHit(tile){
+    tile.resolved = true;
+    tile.el.style.setProperty('--ty', (tile.lastTop||0) + 'px');
+    tile.el.classList.add('hit');
+    setTimeout(()=>{ if(tile.el.parentNode) tile.el.parentNode.removeChild(tile.el); }, 340);
+  }
+  function resolveMiss(tile){
+    tile.resolved = true;
+    tile.el.style.setProperty('--ty', (tile.lastTop||0) + 'px');
+    tile.el.classList.add('miss');
+    setTimeout(()=>{ if(tile.el.parentNode) tile.el.parentNode.removeChild(tile.el); }, 260);
+  }
+
+  function tick(ts){
+    if(!playing) return;
+    const elapsed = ts - songStartTs;
+
+    while(spawnQueue.length && spawnQueue[0].spawnTime <= elapsed){
+      spawnTile(spawnQueue.shift());
+    }
+
+    for(const t of activeTiles){
+      if(t.resolved) continue;
+      const frac = (elapsed - t.spawnTime) / fallMs;
+      t.lastTop = topForFrac(frac);
+      t.el.style.transform = `translateY(${t.lastTop}px)`;
+      if(elapsed > t.hitTime + tolMs){
+        resolveMiss(t);
+      }
+    }
+
+    activeTiles = activeTiles.filter(t=> !(t.resolved && !t.el.parentNode));
+
+    if(spawnQueue.length === 0 && activeTiles.every(t=>t.resolved) && totalNotes > 0 && !finishTimer){
+      finishTimer = setTimeout(finishSong, 500);
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function finishSong(){
+    playing = false;
+    if(rafId) cancelAnimationFrame(rafId);
+    const ratio = totalNotes ? hits / totalNotes : 0;
+    const stars = ratio >= 0.85 ? 3 : (ratio >= 0.5 ? 2 : 1);
+    document.getElementById('end-stars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3-stars);
+    document.getElementById('end-score').textContent = score;
+    showScreen('end');
+  }
+
+  function handleTap(laneIdx){
+    ensureAudio();
+    const now = performance.now() - songStartTs;
+    let best = null, bestDiff = Infinity;
+    for(const t of activeTiles){
+      if(t.resolved || t.lane !== laneIdx) continue;
+      const diff = Math.abs(now - t.hitTime);
+      if(diff <= tolMs && diff < bestDiff){ best = t; bestDiff = diff; }
+    }
+    if(best){
+      resolveHit(best);
+      playNote(best.note, best.durMs/1000);
+      hits += 1;
+      score += 10;
+      if(score > sessionBest) sessionBest = score;
+      updateHUD();
+    }
+  }
+
+  laneEls.forEach((lane, idx)=>{
+    lane.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      lane.classList.add('tapped');
+      setTimeout(()=>lane.classList.remove('tapped'), 150);
+      if(playing) handleTap(idx);
+    });
+  });
+
+  window.addEventListener('resize', ()=>{ if(playing) measureGeometry(); });
+
+  updateHUD();
+})();
+</script>
+</body>
+</html>
